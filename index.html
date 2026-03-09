@@ -38,6 +38,15 @@
         font-size: 14px;
         margin-bottom: 24px;
       }
+      .badge {
+        display: inline-block;
+        background: #e8f5e9;
+        color: #2e7d32;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        margin-left: 4px;
+      }
 
       .upload-area {
         background: #fff;
@@ -185,6 +194,70 @@
       .tip-box b {
         color: #7a5008;
       }
+
+      /* Setup card */
+      .setup-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      .setup-desc {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 12px;
+        line-height: 1.5;
+      }
+      .setup-link {
+        display: block;
+        text-align: center;
+        padding: 12px;
+        margin-bottom: 12px;
+        background: #f0f7ff;
+        color: #2563eb;
+        border-radius: 8px;
+        text-decoration: none;
+        font-size: 15px;
+        font-weight: 500;
+      }
+      .setup-link:active {
+        background: #dbeafe;
+      }
+      .api-input {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        margin-bottom: 10px;
+        font-family: monospace;
+      }
+      .save-btn {
+        width: 100%;
+        padding: 13px;
+        background: #34c759;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .save-btn:active {
+        background: #2da44e;
+      }
+
+      .change-key {
+        text-align: center;
+        margin-top: 16px;
+        font-size: 12px;
+        color: #999;
+      }
+      .change-key a {
+        color: #999;
+        text-decoration: underline;
+        cursor: pointer;
+      }
+
       .hidden {
         display: none !important;
       }
@@ -192,11 +265,36 @@
   </head>
   <body>
     <div class="container">
-      <h1>語音轉文字</h1>
-      <p class="subtitle">上傳螢幕錄影或音檔，AI 自動轉成可複製的文字</p>
+      <h1>語音轉文字 <span class="badge">雲端版</span></h1>
+      <p class="subtitle">上傳螢幕錄影或音檔，AI 秒速轉成可複製的文字</p>
 
+      <!-- Setup: API Key -->
+      <div class="card" id="setupCard">
+        <p class="setup-title">首次設定（只需一次）</p>
+        <p class="setup-desc">
+          需要免費的 Groq API Key 來啟用雲端語音辨識。<br />
+          點下面的連結，用 Google 帳號登入，然後建立一組 Key 複製貼回來。
+        </p>
+        <a
+          href="https://console.groq.com/keys"
+          target="_blank"
+          rel="noopener"
+          class="setup-link"
+        >
+          前往 Groq 申請免費 API Key →
+        </a>
+        <input
+          type="text"
+          id="apiKeyInput"
+          placeholder="貼上你的 API Key（gsk_ 開頭）"
+          class="api-input"
+        />
+        <button class="save-btn" onclick="saveKey()">儲存並開始使用</button>
+      </div>
+
+      <!-- Upload -->
       <div
-        class="upload-area"
+        class="upload-area hidden"
         id="uploadArea"
         onclick="document.getElementById('fileInput').click()"
       >
@@ -214,9 +312,7 @@
         <div class="file-row">
           <span>📄</span>
           <span class="file-name" id="fileName"></span>
-          <button class="file-remove" id="removeBtn" onclick="resetUI()">
-            ✕
-          </button>
+          <button class="file-remove" onclick="resetUI()">✕</button>
         </div>
         <div class="progress-section hidden" id="progressSection">
           <div class="progress-bar">
@@ -236,62 +332,109 @@
         </button>
       </div>
 
-      <div class="tip-box">
+      <div class="tip-box hidden" id="tipBox">
         <b>使用方式：</b><br />
-        1. 在塔羅網站播放語音時，開啟手機「螢幕錄影」<br />
+        1. 在塔羅 APP 播放語音時，開啟手機「螢幕錄影」<br />
         2. 錄完後回到這裡，上傳錄影檔<br />
-        3. 等 AI 辨識完成，點「複製文字」
+        3. 幾秒鐘就能拿到文字，點「複製文字」
+      </div>
+
+      <div class="change-key hidden" id="changeKeyArea">
+        <a onclick="clearKey()">更換 API Key</a>
       </div>
     </div>
 
-    <script type="module">
-      import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
+    <script>
+      var $ = function (id) {
+        return document.getElementById(id);
+      };
+      var API_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
 
-      let transcriber = null;
-      const $ = (id) => document.getElementById(id);
+      // --- Init ---
+      function initUI() {
+        var key = localStorage.getItem("groq_api_key");
+        if (key) {
+          $("setupCard").classList.add("hidden");
+          $("uploadArea").classList.remove("hidden");
+          $("tipBox").classList.remove("hidden");
+          $("changeKeyArea").classList.remove("hidden");
+        } else {
+          $("setupCard").classList.remove("hidden");
+          $("uploadArea").classList.add("hidden");
+          $("tipBox").classList.add("hidden");
+          $("changeKeyArea").classList.add("hidden");
+        }
+      }
+      initUI();
 
-      // File input handler
+      // --- API Key ---
+      function saveKey() {
+        var key = $("apiKeyInput").value.trim();
+        if (!key) {
+          alert("請先貼上 API Key");
+          return;
+        }
+        localStorage.setItem("groq_api_key", key);
+        initUI();
+      }
+      window.saveKey = saveKey;
+
+      function clearKey() {
+        localStorage.removeItem("groq_api_key");
+        $("apiKeyInput").value = "";
+        $("resultCard").classList.add("hidden");
+        $("fileCard").classList.add("hidden");
+        $("errorBox").classList.add("hidden");
+        initUI();
+      }
+      window.clearKey = clearKey;
+
+      // --- File ---
       $("fileInput").addEventListener("change", function () {
         if (this.files[0]) handleFile(this.files[0]);
       });
 
-      // Reset UI
-      window.resetUI = () => {
+      function resetUI() {
         $("fileInput").value = "";
         $("fileCard").classList.add("hidden");
         $("uploadArea").classList.remove("hidden");
         $("resultCard").classList.add("hidden");
         $("errorBox").classList.add("hidden");
-      };
+      }
+      window.resetUI = resetUI;
 
-      // Copy result
-      window.copyResult = async () => {
-        const btn = $("copyBtn");
-        try {
-          await navigator.clipboard.writeText($("resultText").textContent);
-          btn.textContent = "已複製 ✓";
-          btn.classList.add("done");
-          setTimeout(() => {
-            btn.textContent = "複製文字";
-            btn.classList.remove("done");
-          }, 2000);
-        } catch {
-          const sel = window.getSelection();
-          const range = document.createRange();
-          range.selectNodeContents($("resultText"));
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      };
+      // --- Copy ---
+      function copyResult() {
+        var btn = $("copyBtn");
+        navigator.clipboard
+          .writeText($("resultText").textContent)
+          .then(function () {
+            btn.textContent = "已複製 ✓";
+            btn.classList.add("done");
+            setTimeout(function () {
+              btn.textContent = "複製文字";
+              btn.classList.remove("done");
+            }, 2000);
+          })
+          .catch(function () {
+            var sel = window.getSelection();
+            var range = document.createRange();
+            range.selectNodeContents($("resultText"));
+            sel.removeAllRanges();
+            sel.addRange(range);
+          });
+      }
+      window.copyResult = copyResult;
 
+      // --- Progress ---
       function showProgress(pct, text) {
         $("progressSection").classList.remove("hidden");
         $("progressFill").style.width = pct + "%";
         $("progressLabel").textContent = text;
       }
 
+      // --- Main ---
       async function handleFile(file) {
-        // Reset
         $("errorBox").classList.add("hidden");
         $("resultCard").classList.add("hidden");
         $("uploadArea").classList.add("hidden");
@@ -299,73 +442,102 @@
         $("fileName").textContent = file.name;
 
         try {
-          // 1. Load model (cached after first time)
-          if (!transcriber) {
-            showProgress(5, "首次載入 AI 模型（約 200MB，之後免下載）...");
-            transcriber = await pipeline(
-              "automatic-speech-recognition",
-              "Xenova/whisper-small",
-              {
-                progress_callback: (p) => {
-                  if (p.status === "progress" && p.progress) {
-                    const pct = Math.min(5 + p.progress * 0.4, 45);
-                    showProgress(
-                      pct,
-                      `下載模型中 ${Math.round(p.progress)}%...`,
-                    );
-                  }
-                },
-              },
-            );
-          }
+          showProgress(15, "解析音檔中...");
+          var audioData = await decodeToMono16k(file);
 
-          // 2. Decode audio from file
-          showProgress(50, "解析音檔中...");
-          const audioData = await decodeToMono16k(file);
+          showProgress(40, "準備上傳...");
+          var wavBlob = float32ToWav(audioData, 16000);
 
-          const durationSec = audioData.length / 16000;
-          const estMin = Math.max(1, Math.round(durationSec / 30));
-          showProgress(60, `AI 辨識中（約 ${estMin} 分鐘）...`);
+          var sizeMB = (wavBlob.size / 1024 / 1024).toFixed(1);
+          showProgress(50, "上傳中（" + sizeMB + " MB）...");
 
-          // 3. Transcribe
-          const result = await transcriber(audioData, {
-            language: "chinese",
-            task: "transcribe",
-            chunk_length_s: 30,
-            stride_length_s: 5,
+          var apiKey = localStorage.getItem("groq_api_key");
+          var formData = new FormData();
+          formData.append("file", wavBlob, "audio.wav");
+          formData.append("model", "whisper-large-v3-turbo");
+          formData.append("language", "zh");
+          formData.append("response_format", "text");
+
+          showProgress(60, "雲端辨識中...");
+          var response = await fetch(API_URL, {
+            method: "POST",
+            headers: { Authorization: "Bearer " + apiKey },
+            body: formData,
           });
 
+          if (!response.ok) {
+            var errText = await response.text();
+            if (response.status === 401) {
+              throw new Error("API Key 無效，請點底部「更換 API Key」重新設定");
+            }
+            throw new Error("API 錯誤 (" + response.status + "): " + errText);
+          }
+
+          var text = await response.text();
           showProgress(100, "完成！");
-          $("resultText").textContent = result.text.trim();
+          $("resultText").textContent = text.trim();
           $("resultCard").classList.remove("hidden");
-          setTimeout(() => $("progressSection").classList.add("hidden"), 800);
+          setTimeout(function () {
+            $("progressSection").classList.add("hidden");
+          }, 800);
         } catch (err) {
           console.error(err);
-          $("errorBox").textContent =
-            "轉換失敗：" +
-            (err.message || "不支援此檔案格式，請改用 MP4 或 MP3");
+          var msg = err.message || "未知錯誤";
+          if (msg.indexOf("Failed to fetch") !== -1) {
+            msg = "網路連線失敗，請確認有網路連線";
+          }
+          $("errorBox").textContent = "轉換失敗：" + msg;
           $("errorBox").classList.remove("hidden");
           $("progressSection").classList.add("hidden");
         }
       }
 
+      // --- Audio decode ---
       async function decodeToMono16k(file) {
-        const arrayBuffer = await file.arrayBuffer();
-        const audioCtx = new AudioContext();
-        const decoded = await audioCtx.decodeAudioData(arrayBuffer);
-
-        // Resample to 16kHz mono via OfflineAudioContext
-        const targetRate = 16000;
-        const numSamples = Math.ceil(decoded.duration * targetRate);
-        const offlineCtx = new OfflineAudioContext(1, numSamples, targetRate);
-        const source = offlineCtx.createBufferSource();
+        var arrayBuffer = await file.arrayBuffer();
+        var audioCtx = new AudioContext();
+        var decoded = await audioCtx.decodeAudioData(arrayBuffer);
+        var targetRate = 16000;
+        var numSamples = Math.ceil(decoded.duration * targetRate);
+        var offlineCtx = new OfflineAudioContext(1, numSamples, targetRate);
+        var source = offlineCtx.createBufferSource();
         source.buffer = decoded;
         source.connect(offlineCtx.destination);
         source.start(0);
-        const resampled = await offlineCtx.startRendering();
-
+        var resampled = await offlineCtx.startRendering();
         await audioCtx.close();
         return resampled.getChannelData(0);
+      }
+
+      // --- WAV encoder ---
+      function float32ToWav(samples, sampleRate) {
+        var len = samples.length;
+        var buffer = new ArrayBuffer(44 + len * 2);
+        var v = new DataView(buffer);
+        writeStr(v, 0, "RIFF");
+        v.setUint32(4, 36 + len * 2, true);
+        writeStr(v, 8, "WAVE");
+        writeStr(v, 12, "fmt ");
+        v.setUint32(16, 16, true);
+        v.setUint16(20, 1, true);
+        v.setUint16(22, 1, true);
+        v.setUint32(24, sampleRate, true);
+        v.setUint32(28, sampleRate * 2, true);
+        v.setUint16(32, 2, true);
+        v.setUint16(34, 16, true);
+        writeStr(v, 36, "data");
+        v.setUint32(40, len * 2, true);
+        for (var i = 0, off = 44; i < len; i++, off += 2) {
+          var s = Math.max(-1, Math.min(1, samples[i]));
+          v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        }
+        return new Blob([buffer], { type: "audio/wav" });
+      }
+
+      function writeStr(view, offset, str) {
+        for (var i = 0; i < str.length; i++) {
+          view.setUint8(offset + i, str.charCodeAt(i));
+        }
       }
     </script>
   </body>
