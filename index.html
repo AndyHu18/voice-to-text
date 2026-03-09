@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>語音轉文字</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC",
+          sans-serif;
+        background: #f0f2f5;
+        color: #1a1a1a;
+        min-height: 100dvh;
+        padding: 16px;
+      }
+      .container {
+        max-width: 480px;
+        margin: 0 auto;
+        padding-top: 20px;
+      }
+      h1 {
+        font-size: 26px;
+        text-align: center;
+        margin-bottom: 4px;
+      }
+      .subtitle {
+        text-align: center;
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 24px;
+      }
+
+      .upload-area {
+        background: #fff;
+        border: 2px dashed #ccc;
+        border-radius: 16px;
+        padding: 44px 20px;
+        text-align: center;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        transition: border-color 0.2s;
+      }
+      .upload-area:active {
+        border-color: #4a90d9;
+        background: #f8faff;
+      }
+      .upload-icon {
+        font-size: 52px;
+        display: block;
+        margin-bottom: 12px;
+      }
+      .upload-text {
+        font-size: 17px;
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 6px;
+      }
+      .upload-hint {
+        font-size: 13px;
+        color: #999;
+      }
+      input[type="file"] {
+        display: none;
+      }
+
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      }
+      .file-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .file-name {
+        flex: 1;
+        font-size: 14px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .file-remove {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: #f0f0f0;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 15px;
+        color: #999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .progress-section {
+        margin-top: 14px;
+      }
+      .progress-bar {
+        background: #e8e8e8;
+        border-radius: 6px;
+        height: 6px;
+        overflow: hidden;
+      }
+      .progress-fill {
+        background: linear-gradient(90deg, #4a90d9, #67b8f5);
+        height: 100%;
+        width: 0%;
+        border-radius: 6px;
+        transition: width 0.4s ease;
+      }
+      .progress-label {
+        font-size: 13px;
+        color: #888;
+        margin-top: 8px;
+        text-align: center;
+      }
+
+      .result-label {
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 10px;
+        color: #555;
+      }
+      .result-text {
+        font-size: 16px;
+        line-height: 1.8;
+        white-space: pre-wrap;
+        word-break: break-word;
+        min-height: 60px;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+      .copy-btn {
+        display: block;
+        width: 100%;
+        margin-top: 16px;
+        padding: 14px;
+        background: #4a90d9;
+        color: #fff;
+        border: none;
+        border-radius: 10px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .copy-btn:active {
+        background: #3a7bc8;
+      }
+      .copy-btn.done {
+        background: #34c759;
+      }
+
+      .error-box {
+        background: #fff2f2;
+        color: #d32f2f;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-top: 12px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .tip-box {
+        background: #fffbeb;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-top: 20px;
+        font-size: 13px;
+        color: #92600a;
+        line-height: 1.6;
+      }
+      .tip-box b {
+        color: #7a5008;
+      }
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>語音轉文字</h1>
+      <p class="subtitle">上傳螢幕錄影或音檔，AI 自動轉成可複製的文字</p>
+
+      <div
+        class="upload-area"
+        id="uploadArea"
+        onclick="document.getElementById('fileInput').click()"
+      >
+        <span class="upload-icon">🎙️</span>
+        <p class="upload-text">點擊選擇檔案</p>
+        <p class="upload-hint">支援 MP4・MOV・MP3・M4A・WAV・WebM</p>
+      </div>
+      <input
+        type="file"
+        id="fileInput"
+        accept="audio/*,video/*,.mp3,.m4a,.wav,.ogg,.mp4,.mov,.webm"
+      />
+
+      <div class="card hidden" id="fileCard">
+        <div class="file-row">
+          <span>📄</span>
+          <span class="file-name" id="fileName"></span>
+          <button class="file-remove" id="removeBtn" onclick="resetUI()">
+            ✕
+          </button>
+        </div>
+        <div class="progress-section hidden" id="progressSection">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <p class="progress-label" id="progressLabel">準備中...</p>
+        </div>
+      </div>
+
+      <div class="error-box hidden" id="errorBox"></div>
+
+      <div class="card hidden" id="resultCard">
+        <p class="result-label">📝 轉換結果</p>
+        <div class="result-text" id="resultText"></div>
+        <button class="copy-btn" id="copyBtn" onclick="copyResult()">
+          複製文字
+        </button>
+      </div>
+
+      <div class="tip-box">
+        <b>使用方式：</b><br />
+        1. 在塔羅網站播放語音時，開啟手機「螢幕錄影」<br />
+        2. 錄完後回到這裡，上傳錄影檔<br />
+        3. 等 AI 辨識完成，點「複製文字」
+      </div>
+    </div>
+
+    <script type="module">
+      import { pipeline } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
+
+      let transcriber = null;
+      const $ = (id) => document.getElementById(id);
+
+      // File input handler
+      $("fileInput").addEventListener("change", function () {
+        if (this.files[0]) handleFile(this.files[0]);
+      });
+
+      // Reset UI
+      window.resetUI = () => {
+        $("fileInput").value = "";
+        $("fileCard").classList.add("hidden");
+        $("uploadArea").classList.remove("hidden");
+        $("resultCard").classList.add("hidden");
+        $("errorBox").classList.add("hidden");
+      };
+
+      // Copy result
+      window.copyResult = async () => {
+        const btn = $("copyBtn");
+        try {
+          await navigator.clipboard.writeText($("resultText").textContent);
+          btn.textContent = "已複製 ✓";
+          btn.classList.add("done");
+          setTimeout(() => {
+            btn.textContent = "複製文字";
+            btn.classList.remove("done");
+          }, 2000);
+        } catch {
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents($("resultText"));
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
+      };
+
+      function showProgress(pct, text) {
+        $("progressSection").classList.remove("hidden");
+        $("progressFill").style.width = pct + "%";
+        $("progressLabel").textContent = text;
+      }
+
+      async function handleFile(file) {
+        // Reset
+        $("errorBox").classList.add("hidden");
+        $("resultCard").classList.add("hidden");
+        $("uploadArea").classList.add("hidden");
+        $("fileCard").classList.remove("hidden");
+        $("fileName").textContent = file.name;
+
+        try {
+          // 1. Load model (cached after first time)
+          if (!transcriber) {
+            showProgress(5, "首次載入 AI 模型（約 200MB，之後免下載）...");
+            transcriber = await pipeline(
+              "automatic-speech-recognition",
+              "Xenova/whisper-small",
+              {
+                progress_callback: (p) => {
+                  if (p.status === "progress" && p.progress) {
+                    const pct = Math.min(5 + p.progress * 0.4, 45);
+                    showProgress(
+                      pct,
+                      `下載模型中 ${Math.round(p.progress)}%...`,
+                    );
+                  }
+                },
+              },
+            );
+          }
+
+          // 2. Decode audio from file
+          showProgress(50, "解析音檔中...");
+          const audioData = await decodeToMono16k(file);
+
+          const durationSec = audioData.length / 16000;
+          const estMin = Math.max(1, Math.round(durationSec / 30));
+          showProgress(60, `AI 辨識中（約 ${estMin} 分鐘）...`);
+
+          // 3. Transcribe
+          const result = await transcriber(audioData, {
+            language: "chinese",
+            task: "transcribe",
+            chunk_length_s: 30,
+            stride_length_s: 5,
+          });
+
+          showProgress(100, "完成！");
+          $("resultText").textContent = result.text.trim();
+          $("resultCard").classList.remove("hidden");
+          setTimeout(() => $("progressSection").classList.add("hidden"), 800);
+        } catch (err) {
+          console.error(err);
+          $("errorBox").textContent =
+            "轉換失敗：" +
+            (err.message || "不支援此檔案格式，請改用 MP4 或 MP3");
+          $("errorBox").classList.remove("hidden");
+          $("progressSection").classList.add("hidden");
+        }
+      }
+
+      async function decodeToMono16k(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const audioCtx = new AudioContext();
+        const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+
+        // Resample to 16kHz mono via OfflineAudioContext
+        const targetRate = 16000;
+        const numSamples = Math.ceil(decoded.duration * targetRate);
+        const offlineCtx = new OfflineAudioContext(1, numSamples, targetRate);
+        const source = offlineCtx.createBufferSource();
+        source.buffer = decoded;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+        const resampled = await offlineCtx.startRendering();
+
+        await audioCtx.close();
+        return resampled.getChannelData(0);
+      }
+    </script>
+  </body>
+</html>
